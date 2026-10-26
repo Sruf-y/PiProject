@@ -2,7 +2,10 @@ package com.botofan
 
 import com.pi4j.Pi4J
 import com.pi4j.context.Context
+import com.pi4j.io.gpio.analog.Analog
 import com.pi4j.io.gpio.analog.AnalogInput
+import com.pi4j.io.gpio.analog.AnalogInputConfigBuilder
+import com.pi4j.io.gpio.analog.AnalogInputProvider
 import com.pi4j.io.gpio.digital.DigitalInput
 import com.pi4j.io.gpio.digital.DigitalInputConfig
 import com.pi4j.io.gpio.digital.DigitalInputConfigBuilder
@@ -26,8 +29,44 @@ lateinit var pi: Context
 lateinit var console: Console
 
 lateinit var led: DigitalOutput
-lateinit var sensor1: DigitalInput
-lateinit var sensor2: DigitalInput
+lateinit var sensor1: AnalogInput
+lateinit var sensor2: AnalogInput
+fun DigitalInput.read(): Boolean{
+   return this.isHigh
+}
+fun AnalogInput.read(): Int{
+   return this.value()
+}
+
+val bucketSize: Int = 10
+lateinit var bucket1: ArrayDeque<Int>
+lateinit var bucket2: ArrayDeque<Int>
+fun ArrayDeque<Int>.isFull(): Boolean {
+   return this.size >= 10
+}
+fun ArrayDeque<Int>.empty(): Array<Int> {
+   val array: Array<Int> = this.toTypedArray()
+   this.clear()
+   return array
+}
+
+val historySize:Int = 500
+lateinit var bucketHistory1: ArrayDeque<Double>
+lateinit var bucketHistory2: ArrayDeque<Double>
+/**
+ * Potentially add ignorance for outliers of magnitude 1.5 or 2.0 of the average value
+ * */
+fun ArrayDeque<Int>.addToHistory(history: ArrayDeque<Double>){
+   
+   if(history.size>=historySize && historySize>0) {
+      while(history.size>= historySize) {
+         history.removeLastOrNull()
+      }
+   }
+   
+   this.clear()
+}
+
 
 val scope = CoroutineScope(Dispatchers.Default)
 
@@ -40,6 +79,10 @@ fun main() {
       
       runBlocking {
       
+         receiveInputs()
+         
+         proccessInputs()
+         
       }
       
    } catch (e: Throwable) {
@@ -49,6 +92,9 @@ fun main() {
    }
 }
 
+/**
+ * Setup pins and initialize objects. And buckets
+ * */
 fun init() {
    pi = Injector.getPi4Context()
    console = Injector.getPi4Console()
@@ -57,12 +103,10 @@ fun init() {
    val LED_PIN = 27
    
    val SENSOR1_PIN = -1
-   val SENSOR1_DEBOUNCE = 0L
    val SENSOR1_NAME = "Sensor1"
    val SENSOR1_ID = "PI_WIRED_SENSOR_2"
    
    val SENSOR2_PIN = -1
-   val SENSOR2_DEBOUNCE = 0L
    val SENSOR2_NAME = "Sensor2"
    val SENSOR2_ID = "PI_WIRED_SENSOR_2"
    
@@ -81,19 +125,71 @@ fun init() {
    led = pi.digitalOutput<DigitalOutputProvider>().create(ledConfig)
    
    // ########################### Set Inputs ##################################
-   val sensor1Config = DigitalInputConfigBuilder.newInstance(pi)
+   val sensor1Config = AnalogInputConfigBuilder.newInstance(pi)
       .bcm(SENSOR1_PIN)
-      .debounce(SENSOR1_DEBOUNCE)
       .id(SENSOR1_ID)
       .name(SENSOR1_NAME)
       .build()
-   sensor1 = pi.digitalInput<DigitalInputProvider>().create(sensor1Config)
+   sensor1 = pi.analogInput<AnalogInputProvider>().create(sensor1Config)
    
-   val sensor2Config = DigitalInputConfigBuilder.newInstance(pi)
+   val sensor2Config = AnalogInputConfigBuilder.newInstance(pi)
       .bcm(SENSOR2_PIN)
-      .debounce(SENSOR2_DEBOUNCE)
       .id(SENSOR2_ID)
       .name(SENSOR2_NAME)
       .build()
-   sensor2 = pi.digitalInput<DigitalInputProvider>().create(sensor2Config)
+   sensor2 = pi.analogInput<AnalogInputProvider>().create(sensor2Config)
 }
+/**
+ * Receive inputs.
+ * ## Requirements
+ * * Read new inputs
+ * * Store new inputs in a bucket
+ * * Coagulate full bucket
+ * */
+fun receiveInputs(){
+   val s1 = sensor1.read()
+   if(bucket1.isFull()){
+      bucket1.addToHistory(bucketHistory1)
+   }
+   bucket1.add(s1)
+   
+   
+   val s2 = sensor2.read()
+   if(bucket2.isFull()){
+      bucket2.addToHistory(bucketHistory2)
+   }
+   bucket2.add(s2)
+}
+/**
+ * Proccess new received inputs.
+ *
+ * ## Requirements
+ * * Proccess current bucket of inputs
+ * */
+fun proccessInputs(){
+
+}
+/**
+ * ## Requirements:
+ * * Receive client request for a socket connection and create it if there is a request that doesn't match an existing socket.
+ * */
+fun receiveAPIrequest(){
+
+}
+/**
+ * ## Requirements:
+ * * Send an api update through a socket.
+ * */
+fun sendAPIupdate(){
+
+}
+/**
+ * ## Requirements:
+ * * Verify if sockets are still active and if not, deactivate them
+ * */
+fun verifyAPIsockets(){
+   // make this affect a socket instead of this empty code
+   sendAPIupdate()
+}
+
+
