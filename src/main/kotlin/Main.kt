@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import com.pi4j.io.gpio.digital.DigitalState.LOW
 import com.pi4j.util.Console
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 lateinit var pi: Context
 lateinit var console: Console
@@ -18,30 +19,33 @@ lateinit var led: DigitalOutput
 lateinit var sensor1: SensorInterface<Double>
 lateinit var sensor2: SensorInterface<Double>
 
-var dataFormat:String = "%.1f"
+var dataFormat: String = "%.2f"
+var delayTime: Long = 500
 
-var bucketSize: Int = 10
+var bucketSize: Int = 5
 lateinit var bucket1: ArrayDeque<Double>
 lateinit var bucket2: ArrayDeque<Double>
 fun ArrayDeque<Double>.isFull(): Boolean {
    return this.size >= bucketSize
 }
+
 fun ArrayDeque<Double>.empty(): Array<Double> {
    val array = this.toTypedArray()
    this.clear()
    return array
 }
 
-var historySize:Int = 500
+var historySize: Int = 20
 lateinit var bucketHistory1: ArrayDeque<Double>
 lateinit var bucketHistory2: ArrayDeque<Double>
+
 /**
  * Potentially add ignorance for outliers of magnitude 1.5 or 2.0 of the average value
  * */
-fun ArrayDeque<Double>.addToHistory(history: ArrayDeque<Double>){
+fun ArrayDeque<Double>.addToHistory(history: ArrayDeque<Double>) {
    
-   if(history.size>=historySize && historySize>=0) {
-      while(history.size>= historySize) {
+   if (history.size >= historySize && historySize >= 0) {
+      while (history.size >= historySize) {
          history.removeLastOrNull()
       }
    }
@@ -53,53 +57,63 @@ fun ArrayDeque<Double>.addToHistory(history: ArrayDeque<Double>){
 
 val scope = CoroutineScope(Dispatchers.Default)
 
-fun displayArgs(){
-   println("""
+fun displayArgs() {
+   println(
+      """
       =====================================================
       Arguments:
-      -h : show help
-      -bucketSize : set the bucketing size, default is 10
-      -historySize : set the history max size, default is 500
-      -format : set the format for the readings. Ex: %1.f or %.f or %2.2f. Default is %.1f
+      -h,-help : show help
+      -bucketSize,-bs : set the bucketing size, default is ${bucketSize}
+      -historySize,-hs : set the history max size, default is ${historySize}
+      -format : set the format for the readings. Ex: %1.f or %.f or %2.2f. Default is ${dataFormat}
+      -delay : set the loop delay. Default is ${delayTime}
       =====================================================
-   """.trimIndent())
+   """.trimIndent()
+   )
 }
 
-fun parseFormat(lines: List<String>): Map<String, Double> =
-   lines.filter { it.contains('=') }
-      .associate {
-         val (k, v) = it.split('=', limit = 2).map(String::trim)
-         k to v.toDouble()
-      }
-
-fun Double.format(format:String): Double{
-   return String.format(format,this).toDouble()
+fun ArrayDeque<Double>.format(format:String): String{
+   return "["+this.joinToString(", ") { String.format(format,it) }+"]"
 }
-fun main(args:Array<String>) {
+
+fun main(args: Array<String>) {
    
-   if(args.isNotEmpty()){
-      if (
-         args.first() == "-h") {
+   if (args.isNotEmpty()) {
+      if (args.first() == "-h" || args.first() == "-help") {
          displayArgs()
          return
       }
-      if (args.indexOf("-bucketSize") != -1) {
+      var argRet = -1
+      
+      fun tryRet(vararg names: String, onFound: (index: Int, name: String) -> Unit): Boolean {
+         for (name in names) {
+            val i = args.indexOf(name)
+            if (i != -1) {
+               onFound(i, name)
+               return true
+            }
+         }
+         return false
+      }
+      
+      
+      tryRet("-bucketSize","-bs"){index,_->
          try {
-            bucketSize = args[args.indexOf("-bucketSize") + 1].toInt()
+            bucketSize = args[index + 1].toInt()
          } catch (ex: Exception) {
             throw Exception("Expected integer after \"-bucketSize\"")
          }
       }
-      if (args.indexOf("-historySize") != -1) {
+      tryRet("-historySize","-hs"){index,_->
          try {
-            historySize = args[args.indexOf("-historySize") + 1].toInt()
+            historySize = args[index + 1].toInt()
          } catch (ex: Exception) {
             throw Exception("Expected integer after \"-historySize\"")
          }
       }
-      if (args.indexOf("-format") != -1) {
+      tryRet("-format"){index,_->
          try {
-            val newformat = args[args.indexOf("-format") + 1]
+            val newformat = args[index + 1]
             String.format(newformat, 1.0) // try to see if the format is good or not
             dataFormat = newformat
             
@@ -107,6 +121,14 @@ fun main(args:Array<String>) {
             throw Exception("Invalid format provided after \"-format\"")
          }
       }
+      tryRet("-delayTime"){index,_->
+         try {
+            delayTime = args[index + 1].toLong()
+         } catch (ex: Exception) {
+            throw Exception("Expected long after \"-delayTime\"")
+         }
+      }
+      
    }
    
    
@@ -117,12 +139,15 @@ fun main(args:Array<String>) {
       //println("\nUsing provider: ${led.provider()}\n")
       
       runBlocking {
-         while (true){
+         while (true) {
+            
             println("=========================================================")
             receiveInputs()
-         
+            
             proccessInputs()
-            delay(1000)
+            
+            delay(delayTime)
+            
          }
       }
       
@@ -150,8 +175,8 @@ fun init() {
    // ################## Pins and info #####################
    val LED_PIN = 27
    
-   when{
-      LED_PIN < 0 -> throw InvalidPinException(LED_PIN,"Change LED pin!")
+   when {
+      LED_PIN < 0 -> throw InvalidPinException(LED_PIN, "Change LED pin!")
    }
    
    // ########################## Set outputs ###########################
@@ -167,34 +192,35 @@ fun init() {
    val dallases = Dallas18B20.sensors()
    println("Found ${dallases.size} sensors")
    
-   if(dallases.size <2){
+   if (dallases.size < 2) {
       throw Exception("Not all sensors have been detected")
    }
    
-   sensor1 = object: SensorInterface<Double>{
+   sensor1 = object : SensorInterface<Double> {
       override fun onRead(): Double {
          try {
-            val r = Dallas18B20.readTemp(dallases[0].id).format(dataFormat)
+            val r = Dallas18B20.readTemp(dallases[0].id)
             println("Read from sensor ${dallases[0].id} value $r")
             return r
-         }catch (ex: Exception){
+         } catch (ex: Exception) {
             return -1.0
          }
       }
    }
    
-   sensor2 = object: SensorInterface<Double>{
+   sensor2 = object : SensorInterface<Double> {
       override fun onRead(): Double {
          try {
-            val r = Dallas18B20.readTemp(dallases[1].id).format(dataFormat)
+            val r = Dallas18B20.readTemp(dallases[1].id)
             println("Read from sensor ${dallases[1].id} value $r")
             return r
-         }catch (ex: Exception){
+         } catch (ex: Exception) {
             return -1.0
          }
       }
    }
 }
+
 /**
  * Receive inputs.
  * ## Requirements
@@ -202,55 +228,61 @@ fun init() {
  * * Store new inputs in a bucket
  * * Coagulate full bucket
  * */
-fun receiveInputs(){
+fun receiveInputs() {
    val s1 = sensor1.onRead()
-   if(bucket1.isFull()){
+   if (bucket1.isFull()) {
       bucket1.addToHistory(bucketHistory1)
    }
    bucket1.add(s1)
    
    
    val s2 = sensor2.onRead()
-   if(bucket2.isFull()){
+   if (bucket2.isFull()) {
       bucket2.addToHistory(bucketHistory2)
    }
    bucket2.add(s2)
    
-   println("""
-      Bucket1: ${bucket1}
-      History1: ${bucketHistory1}
-      Bucket2: ${bucket2}
-      History2: ${bucketHistory2}
-   """.trimIndent())
+   println(
+      """
+      Bucket1: ${bucket1.format(dataFormat)}
+      History1: ${bucketHistory1.format(dataFormat)}
+      Bucket2: ${bucket2.format(dataFormat)}
+      History2: ${bucketHistory2.format(dataFormat)}
+   """.trimIndent()
+   )
 }
+
 /**
  * Proccess new received inputs.
  *
  * ## Requirements
  * * Proccess current bucket of inputs
  * */
-fun proccessInputs(){
+fun proccessInputs() {
 
 }
+
 /**
  * ## Requirements:
  * * Receive client request for a socket connection and create it if there is a request that doesn't match an existing socket.
  * */
-fun receiveAPIrequest(){
+fun receiveAPIrequest() {
 
 }
+
 /**
  * ## Requirements:
  * * Send an api update through a socket.
  * */
-fun sendAPIupdate(){
+fun sendAPIupdate() {
 
 }
+
 /**
  * ## Requirements:
  * * Verify if sockets are still active and if not, deactivate them
  * */
-fun verifyAPIsockets(){
+fun verifyAPIsockets() {
    // make this affect a socket instead of this empty code
    sendAPIupdate()
 }
