@@ -11,21 +11,18 @@ import com.pi4j.io.gpio.digital.DigitalState.LOW
 import com.pi4j.util.Console
 import kotlinx.coroutines.delay
 import java.util.Locale
-
 lateinit var pi: Context
 lateinit var console: Console
 
 lateinit var led: DigitalOutput
-lateinit var sensor1: SensorInterface<Double>
-lateinit var sensor2: SensorInterface<Double>
+val sensors: ArrayList<SensorInterface<Double>> = ArrayList()
 
 var dataFormat: String = "%.2f"
 var delayTime: Long = 500
 
 var bucketSize: Int = 5
-lateinit var bucket1: ArrayDeque<Double>
-lateinit var bucket2: ArrayDeque<Double>
-fun ArrayDeque<Double>.isFull(): Boolean {
+val buckets: ArrayList<ArrayDeque<Double>> = ArrayList()
+fun <T>ArrayDeque<T>.isFull(): Boolean {
    return this.size >= bucketSize
 }
 
@@ -36,8 +33,7 @@ fun ArrayDeque<Double>.empty(): Array<Double> {
 }
 
 var historySize: Int = 20
-lateinit var bucketHistory1: ArrayDeque<Double>
-lateinit var bucketHistory2: ArrayDeque<Double>
+val bucketHistories: ArrayList<ArrayDeque<Double>> = ArrayList()
 
 /**
  * Potentially add ignorance for outliers of magnitude 1.5 or 2.0 of the average value
@@ -63,10 +59,12 @@ fun displayArgs() {
       =====================================================
       Arguments:
       -h,-help : show help
-      -bucketSize,-bs : set the bucketing size, default is ${bucketSize}
-      -historySize,-hs : set the history max size, default is ${historySize}
+      -bs,-bucketSize : set the bucketing size, default is ${bucketSize}
+      -hs,-historySize : set the history max size, default is ${historySize}
       -format : set the format for the readings. Ex: %1.f or %.f or %2.2f. Default is ${dataFormat}
       -delay : set the loop delay. Default is ${delayTime}
+      -pr,-printReadings : print temperature readings
+      -pb,-printBuckets : print bucket values
       =====================================================
    """.trimIndent()
    )
@@ -76,6 +74,8 @@ fun ArrayDeque<Double>.format(format:String): String{
    return "["+this.joinToString(", ") { String.format(format,it) }+"]"
 }
 
+var printTemperatureReadings = false
+var printBucketValues = false
 fun main(args: Array<String>) {
    
    if (args.isNotEmpty()) {
@@ -128,6 +128,12 @@ fun main(args: Array<String>) {
             throw Exception("Expected long after \"-delayTime\"")
          }
       }
+      tryRet("-pr","-printReadings") {index,_->
+         printTemperatureReadings = true
+      }
+      tryRet("-pb","-printBuckets") {index,_->
+         printBucketValues = true
+      }
       
    }
    
@@ -164,20 +170,38 @@ fun main(args: Array<String>) {
 fun init() {
    pi = Injector.getPi4Context()
    console = Injector.getPi4Console()
-   
+   println("----------------------------------------------")
+   pi.providers().all().forEach { println("${it.value.id}  ${it.value.type}  ${it.value.javaClass.simpleName}") }
+   println("++++++++++++++++++++++++++++++++++++++++++++++")
    // ################## Bucket setup
-   bucket1 = ArrayDeque(bucketSize)
-   bucket2 = ArrayDeque(bucketSize)
    
-   bucketHistory1 = ArrayDeque(historySize)
-   bucketHistory2 = ArrayDeque(historySize)
+   val dallases = Dallas18B20.sensors()
+   println("Found ${dallases.size} sensors")
+   
+   dallases.forEachIndexed { index,sensor->
+      sensors.add(
+         object : SensorInterface<Double> {
+            override fun onRead(): Double {
+               try {
+                  val r = Dallas18B20.readTemp(dallases[index].id)
+                  if(printTemperatureReadings) {
+                     println("Read from sensor ${dallases[index].id} value $r")
+                  }
+                  return r
+               } catch (ex: Exception) {
+                  return -1.0
+               }
+            }
+         }
+      )
+      
+      buckets.add(ArrayDeque(bucketSize))
+      bucketHistories.add(ArrayDeque(bucketSize))
+   }
+   
    
    // ################## Pins and info #####################
    val LED_PIN = 27
-   
-   when {
-      LED_PIN < 0 -> throw InvalidPinException(LED_PIN, "Change LED pin!")
-   }
    
    // ########################## Set outputs ###########################
    val ledConfig = DigitalOutputConfigBuilder.newInstance(pi)
@@ -188,37 +212,6 @@ fun init() {
    led = pi.digitalOutput<DigitalOutputProvider>().create(ledConfig)
    
    // ########################### Set Inputs ##################################
-   
-   val dallases = Dallas18B20.sensors()
-   println("Found ${dallases.size} sensors")
-   
-   if (dallases.size < 2) {
-      throw Exception("Not all sensors have been detected")
-   }
-   
-   sensor1 = object : SensorInterface<Double> {
-      override fun onRead(): Double {
-         try {
-            val r = Dallas18B20.readTemp(dallases[0].id)
-            println("Read from sensor ${dallases[0].id} value $r")
-            return r
-         } catch (ex: Exception) {
-            return -1.0
-         }
-      }
-   }
-   
-   sensor2 = object : SensorInterface<Double> {
-      override fun onRead(): Double {
-         try {
-            val r = Dallas18B20.readTemp(dallases[1].id)
-            println("Read from sensor ${dallases[1].id} value $r")
-            return r
-         } catch (ex: Exception) {
-            return -1.0
-         }
-      }
-   }
 }
 
 /**
@@ -229,27 +222,27 @@ fun init() {
  * * Coagulate full bucket
  * */
 fun receiveInputs() {
-   val s1 = sensor1.onRead()
-   if (bucket1.isFull()) {
-      bucket1.addToHistory(bucketHistory1)
+   
+   sensors.forEachIndexed { index,sensor->
+      try {
+         val temp = sensor.onRead()
+         if (buckets[index].isFull()) {
+            buckets[index].addToHistory(bucketHistories[index])
+         }else{
+            buckets[index].add(temp)
+         }
+         
+      }catch (ex: Exception){
+      
+      }
    }
-   bucket1.add(s1)
    
-   
-   val s2 = sensor2.onRead()
-   if (bucket2.isFull()) {
-      bucket2.addToHistory(bucketHistory2)
+   if(printBucketValues) {
+      sensors.forEachIndexed { index, sensor ->
+         println("Bucket-$index: " + buckets[index].format(dataFormat))
+         println("History$index: " + bucketHistories[index].format(dataFormat))
+      }
    }
-   bucket2.add(s2)
-   
-   println(
-      """
-      Bucket1: ${bucket1.format(dataFormat)}
-      History1: ${bucketHistory1.format(dataFormat)}
-      Bucket2: ${bucket2.format(dataFormat)}
-      History2: ${bucketHistory2.format(dataFormat)}
-   """.trimIndent()
-   )
 }
 
 /**

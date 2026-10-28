@@ -7,19 +7,20 @@ plugins {
 
 application{
     mainClass = "com.botofan.MainKt"   // <-- your fully-qualified main class
+    
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 group = "com.botofan"
 version = "1.0-SNAPSHOT"
 
-repositories {
+repositories{
     mavenCentral()
 }
-
 dependencies {
     testImplementation(kotlin("test"))
     
-    val pi4jVersion = "4.0.0"
+    val pi4jVersion = "4.0.2"
     val slf4jVersion = "2.0.16"
     val kotlinCoroutinesVersion = "1.10.1"
     implementation("com.pi4j:pi4j-core:$pi4jVersion")
@@ -29,6 +30,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinCoroutinesVersion")
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
     implementation("org.slf4j:slf4j-simple:$slf4jVersion")
+    //implementation("com.pi4j.wiringpi:$pi4jVersion")
 }
 
 tasks.test {
