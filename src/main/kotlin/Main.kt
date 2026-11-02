@@ -1,5 +1,6 @@
 package com.botofan
 
+import com.botofan.Extrapolator.lastNAverage
 import com.pi4j.context.Context
 import com.pi4j.io.gpio.digital.DigitalOutput
 import com.pi4j.io.gpio.digital.DigitalOutputConfigBuilder
@@ -11,6 +12,9 @@ import com.pi4j.io.gpio.digital.DigitalState.LOW
 import com.pi4j.util.Console
 import kotlinx.coroutines.delay
 import java.util.Locale
+import kotlin.math.abs
+
+
 lateinit var pi: Context
 lateinit var console: Console
 
@@ -18,10 +22,9 @@ lateinit var led: DigitalOutput
 val sensors: ArrayList<SensorInterface<Double>> = ArrayList()
 
 var dataFormat: String = "%.2f"
-var delayTime: Long = 500
+var delayTime: Long = 0
 
-var bucketSize: Int = 5
-val buckets: ArrayList<ArrayDeque<Double>> = ArrayList()
+var bucketSize: Int = 10
 fun <T>ArrayDeque<T>.isFull(): Boolean {
    return this.size >= bucketSize
 }
@@ -32,26 +35,28 @@ fun ArrayDeque<Double>.empty(): Array<Double> {
    return array
 }
 
-var historySize: Int = 20
-val bucketHistories: ArrayList<ArrayDeque<Double>> = ArrayList()
-
-/**
- * Potentially add ignorance for outliers of magnitude 1.5 or 2.0 of the average value
- * */
-fun ArrayDeque<Double>.addToHistory(history: ArrayDeque<Double>) {
-   
-   if (history.size >= historySize && historySize >= 0) {
-      while (history.size >= historySize) {
-         history.removeLastOrNull()
-      }
-   }
-   history.add(this.average())
-   
-   this.clear()
-}
-
-
 val scope = CoroutineScope(Dispatchers.Default)
+
+val printLines: ArrayList<String> = ArrayList()
+
+fun printBlock(lines: List<String>, prevLineCount: Int): Int {
+   if(printNormal){
+      lines.forEach { println(it) }
+   }else{
+      if (prevLineCount > 0) {
+         print("\u001B[${prevLineCount}A")  // cursor up N lines
+      }
+      print("\u001B[J")                       // clear from cursor to end of screen
+      lines.forEach { println(it) }
+      System.out.flush()
+   }
+   
+   return lines.size
+}
+var printNormal = false
+fun printlb(message:String){
+   printLines.add(message)
+}
 
 fun displayArgs() {
    println(
@@ -59,12 +64,14 @@ fun displayArgs() {
       =====================================================
       Arguments:
       -h,-help : show help
-      -bs,-bucketSize : set the bucketing size, default is ${bucketSize}
-      -hs,-historySize : set the history max size, default is ${historySize}
+      -bs,-bucketSize : set the bucketing size, default is ${bucketSize}. Minimum is 3
       -format : set the format for the readings. Ex: %1.f or %.f or %2.2f. Default is ${dataFormat}
       -delay : set the loop delay. Default is ${delayTime}
-      -pr,-printReadings : print temperature readings
-      -pb,-printBuckets : print bucket values
+      -pr,-printReadings : print temperature readings. false/true. Default ${printTemperatureReadings}
+      -pb,-printBuckets : print bucket values. false/true. Default ${printBucketValues}
+      -dps, -dataPoolSize : nr of iterations until the program proccesses data to point out the bad
+      -pn, printNormal : uses the normal way of printing instead of resetting the cursor. Default is ${printNormal}
+      -takeNValues : how many of the latest values to take into account when proccesing data
       =====================================================
    """.trimIndent()
    )
@@ -75,66 +82,92 @@ fun ArrayDeque<Double>.format(format:String): String{
 }
 
 var printTemperatureReadings = false
-var printBucketValues = false
+var printBucketValues = true
+var dataProccessingPoolSize = 10
+var dataProccesingConsideredN = 5
+
+/**
+ * @param requiredIndex if you want that param to be found on a speciffic index, like 0
+ * */
+fun tryRet(args: Array<String>,vararg names: String,requiredIndex:Int = -1, onFound: (index: Int, name: String) -> Unit): Boolean {
+   for (name in names) {
+      val i = args.indexOf(name)
+      if (i != -1) {
+         if(requiredIndex !=-1)
+         {
+            if(i == requiredIndex){
+               onFound(i,name)
+               return true
+            }
+            return false
+         }else{
+            onFound(i, name)
+            return true
+         }
+      }
+   }
+   return false
+}
 fun main(args: Array<String>) {
    
    if (args.isNotEmpty()) {
-      if (args.first() == "-h" || args.first() == "-help") {
+      
+      if(tryRet(args,"-h","-help", requiredIndex = 0) { index,_->
          displayArgs()
+      }){
          return
       }
-      var argRet = -1
-      
-      fun tryRet(vararg names: String, onFound: (index: Int, name: String) -> Unit): Boolean {
-         for (name in names) {
-            val i = args.indexOf(name)
-            if (i != -1) {
-               onFound(i, name)
-               return true
-            }
-         }
-         return false
-      }
-      
-      
-      tryRet("-bucketSize","-bs"){index,_->
+      tryRet(args,"-bucketSize","-bs"){index,_->
          try {
-            bucketSize = args[index + 1].toInt()
+            bucketSize = maxOf(args[index + 1].toInt(),3)
          } catch (ex: Exception) {
-            throw Exception("Expected integer after \"-bucketSize\"")
+            throw Exception("Expected integer after \"-bucketSize\"",ex)
          }
       }
-      tryRet("-historySize","-hs"){index,_->
-         try {
-            historySize = args[index + 1].toInt()
-         } catch (ex: Exception) {
-            throw Exception("Expected integer after \"-historySize\"")
-         }
-      }
-      tryRet("-format"){index,_->
+      tryRet(args,"-format"){index,_->
          try {
             val newformat = args[index + 1]
             String.format(newformat, 1.0) // try to see if the format is good or not
             dataFormat = newformat
             
          } catch (ex: Exception) {
-            throw Exception("Invalid format provided after \"-format\"")
+            throw Exception("Invalid format provided after \"-format\"",ex)
          }
       }
-      tryRet("-delayTime"){index,_->
+      tryRet(args,"-delayTime"){index,_->
          try {
             delayTime = args[index + 1].toLong()
          } catch (ex: Exception) {
-            throw Exception("Expected long after \"-delayTime\"")
+            throw Exception("Expected long after \"-delayTime\"",ex)
          }
       }
-      tryRet("-pr","-printReadings") {index,_->
-         printTemperatureReadings = true
+      tryRet(args,"-pr","-printReadings") {index,_->
+         try {
+            printTemperatureReadings = args[index + 1].toBoolean()
+         } catch (ex: Exception) {
+            throw Exception("Expected boolean after \"-printReadings\"",ex)
+         }
       }
-      tryRet("-pb","-printBuckets") {index,_->
-         printBucketValues = true
+      tryRet(args,"-pb","-printBuckets") {index,_->
+         try {
+            printBucketValues = args[index + 1].toBoolean()
+         } catch (ex: Exception) {
+            throw Exception("Expected boolean after \"-printBuckets\"",ex)
+         }
       }
-      
+      tryRet(args,"-dps", "-dataPoolSize") {index,_->
+         try {
+            dataProccessingPoolSize = abs(args[index + 1].toInt())
+         } catch (ex: Exception) {
+            throw Exception("Expected integer after \"-dataPoolSize\"",ex)
+         }
+      }
+      tryRet(args,"-pn","-printNormal") { index,_->
+         printNormal = true
+      }
+      tryRet(args,"takeNValues"){index,_->
+         dataProccessingPoolSize = maxOf(args[index + 1].toInt(),3)
+      }
    }
    
    
@@ -142,15 +175,18 @@ fun main(args: Array<String>) {
       println("=============== Program Start ===============")
       init()
       
-      //println("\nUsing provider: ${led.provider()}\n")
+      var prevLineCount = 0
       
       runBlocking {
          while (true) {
             
-            println("=========================================================")
+            printlb("=========================================================")
             receiveInputs()
             
             proccessInputs()
+            
+            prevLineCount = printBlock(printLines,prevLineCount)
+            printLines.clear()
             
             delay(delayTime)
             
@@ -170,8 +206,8 @@ fun main(args: Array<String>) {
 fun init() {
    pi = Injector.getPi4Context()
    console = Injector.getPi4Console()
-   println("----------------------------------------------")
-   pi.providers().all().forEach { println("${it.value.id}  ${it.value.type}  ${it.value.javaClass.simpleName}") }
+   println("Found ${pi.providers().all.size} providers:")
+   pi.providers().all.forEach { println("${it.value.id}  ${it.value.type}  ${it.value.javaClass.simpleName}") }
    println("++++++++++++++++++++++++++++++++++++++++++++++")
    // ################## Bucket setup
    
@@ -182,21 +218,17 @@ fun init() {
       sensors.add(
          object : SensorInterface<Double> {
             override fun onRead(): Double {
-               try {
-                  val r = Dallas18B20.readTemp(dallases[index].id)
-                  if(printTemperatureReadings) {
-                     println("Read from sensor ${dallases[index].id} value $r")
-                  }
-                  return r
-               } catch (ex: Exception) {
-                  return -1.0
+               val r = Dallas18B20.readTemp(dallases[index].id)
+               if (printTemperatureReadings) {
+                  printlb("Read from sensor ${dallases[index].id} value $r")
                }
+               return r
             }
+            
+            override val bucket: ArrayDeque<Double> = ArrayDeque(bucketSize)
+            
          }
       )
-      
-      buckets.add(ArrayDeque(bucketSize))
-      bucketHistories.add(ArrayDeque(bucketSize))
    }
    
    
@@ -226,21 +258,21 @@ fun receiveInputs() {
    sensors.forEachIndexed { index,sensor->
       try {
          val temp = sensor.onRead()
-         if (buckets[index].isFull()) {
-            buckets[index].addToHistory(bucketHistories[index])
+         if (sensor.bucket.isFull()) {
+            sensor.bucket.removeFirstOrNull()
+            sensor.bucket.add(temp)
          }else{
-            buckets[index].add(temp)
+            sensor.bucket.add(temp)
          }
          
       }catch (ex: Exception){
-      
+         ex.printStackTrace()
       }
    }
    
    if(printBucketValues) {
       sensors.forEachIndexed { index, sensor ->
-         println("Bucket-$index: " + buckets[index].format(dataFormat))
-         println("History$index: " + bucketHistories[index].format(dataFormat))
+         printlb("Bucket-$index: " + sensor.bucket.format(dataFormat))
       }
    }
 }
@@ -249,10 +281,37 @@ fun receiveInputs() {
  * Proccess new received inputs.
  *
  * ## Requirements
- * * Proccess current bucket of inputs
+ * * Proccess current bucket of inputs and its history
  * */
+var proccessInputsPoolCur = 0
+var sensorsBucketAverage:Double? = null
+var badSensorValue:Double? = null
+var badSensor:Int? = null
 fun proccessInputs() {
-
+   
+   if(proccessInputsPoolCur>=dataProccessingPoolSize){
+      
+      val badSensorIndex = Extrapolator.getBadSensorIndex(sensors, sensorLeeway = 1.5, recentN = dataProccesingConsideredN)
+      if(badSensorIndex!=null){
+         sensorsBucketAverage = sensors.map { it.bucket.average() }.average()
+         badSensorValue = sensors[badSensorIndex].bucket.lastNAverage(dataProccesingConsideredN)
+      }else{
+         sensorsBucketAverage = null
+         badSensorValue = null
+      }
+      
+      
+      sendAPIupdate(badSensorIndex)
+      
+      
+      proccessInputsPoolCur = 0
+   }else{
+      proccessInputsPoolCur +=1
+   }
+   
+   printlb("Bad sensor is ${badSensor}")
+   printlb("Value: ${badSensorValue}")
+   printlb("SensorsBucketAverage: ${sensorsBucketAverage}")
 }
 
 /**
@@ -267,8 +326,8 @@ fun receiveAPIrequest() {
  * ## Requirements:
  * * Send an api update through a socket.
  * */
-fun sendAPIupdate() {
-
+fun sendAPIupdate(badSensorIndex: Int?) {
+   badSensor = badSensorIndex
 }
 
 /**
@@ -276,8 +335,7 @@ fun sendAPIupdate() {
  * * Verify if sockets are still active and if not, deactivate them
  * */
 fun verifyAPIsockets() {
-   // make this affect a socket instead of this empty code
-   sendAPIupdate()
+
 }
 
 
