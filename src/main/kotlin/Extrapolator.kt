@@ -1,11 +1,12 @@
 package com.botofan
 
+import javax.xml.crypto.Data
 import kotlin.math.abs
 import kotlin.math.max
 
 object Extrapolator {
    
-   fun ArrayDeque<Double>.lastNAverage(n: Int): Double {
+   fun ArrayDeque<Double>.lastNAverage_(n: Int): Double {
       require(isNotEmpty()) { "empty deque" }
       val k = minOf(n, size)
       var sum = 0.0
@@ -13,11 +14,19 @@ object Extrapolator {
       for (v in this.takeLast(k)) sum += v
       return sum / k
    }
+   fun List<DataPoint>.lastNAverage(n: Int): Double {
+      require(isNotEmpty()) { "empty deque" }
+      val k = minOf(n, size)
+      var sum = 0.0
+      // ArrayDeque iterates from head; takeLast/iterator order — safer to use takeLast
+      for (v in this.takeLast(k)) sum += v.value
+      return sum / k
+   }
    /**
     * Get the index of the bad sensor
     * */
    fun getBadSensorIndex(
-      sensors: List<SensorInterface<Double>>,
+      sensors: List<SensorInterface<DataPoint>>,
       sensorLeeway: Double,
       recentN: Int
    ): Int? {
@@ -49,9 +58,30 @@ object Extrapolator {
    ): Boolean {
       val others = avgs.filterIndexed { j, _ -> j != i }
       val othersAgree = (others.max() - others.min()) <= sensorLeeway
-      if (!othersAgree) return false          // can't judge — the "good" pair isn't consistent
+      if (!othersAgree) return false          // the deviation isn't high enough to determine if it's not usable anymore
       val consensus = others.average()
       return abs(avgs[i] - consensus) > maxDeviation
    }
    
+   fun processDegradationCurve(
+      bucket: ArrayDeque<DataPoint>,
+      t_min_distance: Long = 1000,
+      max_window_size: Int = 5,
+      maxPoints: Int = 10
+   ): List<DataPoint> {
+      require(bucket.size >= 3) { "Provided bucket needs to have at least 3 elements" }
+      
+      val win = bucket.toList().takeLast(max_window_size)
+      val deltaT = maxOf(t_min_distance, bucket[1].timestamp - bucket.first().timestamp)
+      
+      // Average STEP over real points only — trend-preserving, no dilution
+      val avgStep = win.zipWithNext { a, b -> b.value - a.value }.average()
+      
+      val lastT = bucket.last().timestamp
+      val lastV = bucket.last().value
+      
+      return (1..maxPoints).map { k ->
+         DataPoint(lastT + k * deltaT, lastV + k * avgStep)
+      }
+   }
 }

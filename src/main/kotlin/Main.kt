@@ -11,7 +11,12 @@ import kotlinx.coroutines.runBlocking
 import com.pi4j.io.gpio.digital.DigitalState.LOW
 import com.pi4j.util.Console
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.Locale
+import javax.xml.crypto.Data
 import kotlin.math.abs
 
 
@@ -19,7 +24,7 @@ lateinit var pi: Context
 lateinit var console: Console
 
 lateinit var led: DigitalOutput
-val sensors: ArrayList<SensorInterface<Double>> = ArrayList()
+val sensors: ArrayList<SensorInterface<DataPoint>> = ArrayList()
 
 var dataFormat: String = "%.2f"
 var delayTime: Long = 0
@@ -29,10 +34,12 @@ fun <T>ArrayDeque<T>.isFull(): Boolean {
    return this.size >= bucketSize
 }
 
-fun ArrayDeque<Double>.empty(): Array<Double> {
-   val array = this.toTypedArray()
-   this.clear()
-   return array
+fun LocalDateTime.toMillis():Long{
+   return this.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+}
+
+fun Long.toLocalDateTime(): LocalDateTime{
+   return Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDateTime()
 }
 
 val scope = CoroutineScope(Dispatchers.Default)
@@ -77,8 +84,12 @@ fun displayArgs() {
    )
 }
 
-fun ArrayDeque<Double>.format(format:String): String{
-   return "["+this.joinToString(", ") { String.format(format,it) }+"]"
+fun List<DataPoint>.format(format:String): String{
+   return "["+this.joinToString(", ") { String.format(format,it.value) }+"]"
+}
+
+fun List<DataPoint>.average():Double{
+   return this.map { it.value }.average()
 }
 
 var printTemperatureReadings = false
@@ -216,16 +227,16 @@ fun init() {
    
    dallases.forEachIndexed { index,sensor->
       sensors.add(
-         object : SensorInterface<Double> {
-            override fun onRead(): Double {
+         object : SensorInterface<DataPoint> {
+            override fun onRead(): DataPoint {
                val r = Dallas18B20.readTemp(dallases[index].id)
                if (printTemperatureReadings) {
                   printlb("Read from sensor ${dallases[index].id} value $r")
                }
-               return r
+               return DataPoint(LocalDateTime.now().toMillis(),r)
             }
             
-            override val bucket: ArrayDeque<Double> = ArrayDeque(bucketSize)
+            override val bucket: ArrayDeque<DataPoint> = ArrayDeque(bucketSize)
             
          }
       )
@@ -287,6 +298,7 @@ var proccessInputsPoolCur = 0
 var sensorsBucketAverage:Double? = null
 var badSensorValue:Double? = null
 var badSensor:Int? = null
+var badDegradation: List<DataPoint>? = null
 fun proccessInputs() {
    
    if(proccessInputsPoolCur>=dataProccessingPoolSize){
@@ -295,9 +307,11 @@ fun proccessInputs() {
       if(badSensorIndex!=null){
          sensorsBucketAverage = sensors.map { it.bucket.average() }.average()
          badSensorValue = sensors[badSensorIndex].bucket.lastNAverage(dataProccesingConsideredN)
+         badDegradation = Extrapolator.processDegradationCurve(sensors[badSensorIndex].bucket)
       }else{
          sensorsBucketAverage = null
          badSensorValue = null
+         badDegradation = null
       }
       
       
@@ -312,6 +326,7 @@ fun proccessInputs() {
    printlb("Bad sensor is ${badSensor}")
    printlb("Value: ${badSensorValue}")
    printlb("SensorsBucketAverage: ${sensorsBucketAverage}")
+   printlb("Future ${badSensor}: ${badDegradation?.format(dataFormat)}")
 }
 
 /**
