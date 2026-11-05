@@ -3,6 +3,7 @@ plugins {
     
     application
     id("com.gradleup.shadow") version "8.3.5"
+    kotlin("plugin.serialization") version "2.1.10"
 }
 
 application{
@@ -34,7 +35,7 @@ dependencies {
     implementation("io.ktor:ktor-server-core:3.1.3")
     implementation("io.ktor:ktor-server-cio:3.1.3")
     implementation("io.ktor:ktor-server-sse:3.1.3")
-    
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 }
 
 tasks.test {

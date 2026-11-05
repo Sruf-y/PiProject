@@ -1,6 +1,5 @@
 package com.botofan
 
-import com.botofan.Extrapolator.lastNAverage
 import com.pi4j.context.Context
 import com.pi4j.io.gpio.digital.DigitalOutput
 import com.pi4j.io.gpio.digital.DigitalOutputConfigBuilder
@@ -11,12 +10,11 @@ import kotlinx.coroutines.runBlocking
 import com.pi4j.io.gpio.digital.DigitalState.LOW
 import com.pi4j.util.Console
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.serialization.InternalSerializationApi
 import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.util.Locale
-import javax.xml.crypto.Data
 import kotlin.math.abs
 
 
@@ -121,9 +119,6 @@ fun tryRet(args: Array<String>,vararg names: String,requiredIndex:Int = -1, onFo
 }
 fun main(args: Array<String>) {
    
-   ServerUtils.serverMain()
-   
-   if(false)
    if (args.isNotEmpty()) {
       
       if(tryRet(args,"-h","-help", requiredIndex = 0) { index,_->
@@ -184,7 +179,10 @@ fun main(args: Array<String>) {
       }
    }
    
-   if(false)
+   scope.launch {
+      ServerUtils.serverMain()
+   }
+   
    try {
       println("=============== Program Start ===============")
       init()
@@ -194,12 +192,12 @@ fun main(args: Array<String>) {
       runBlocking {
          while (true) {
             
-            printlb("=========================================================")
+            //printlb("=========================================================")
             receiveInputs()
             
             proccessInputs()
             
-            prevLineCount = printBlock(printLines,prevLineCount)
+            //prevLineCount = printBlock(printLines,prevLineCount)
             printLines.clear()
             
             delay(delayTime)
@@ -298,38 +296,19 @@ fun receiveInputs() {
  * * Proccess current bucket of inputs and its history
  * */
 var proccessInputsPoolCur = 0
-var sensorsBucketAverage:Double? = null
-var badSensorValue:Double? = null
-var badSensor:Int? = null
-var badDegradation: List<DataPoint>? = null
+var badSensorIndex:Int? = null
 fun proccessInputs() {
    
    if(proccessInputsPoolCur>=dataProccessingPoolSize){
       
-      val badSensorIndex = Extrapolator.getBadSensorIndex(sensors, sensorLeeway = 1.5, recentN = dataProccesingConsideredN)
-      if(badSensorIndex!=null){
-         sensorsBucketAverage = sensors.map { it.bucket.average() }.average()
-         badSensorValue = sensors[badSensorIndex].bucket.lastNAverage(dataProccesingConsideredN)
-         badDegradation = Extrapolator.processDegradationCurve(sensors[badSensorIndex].bucket)
-      }else{
-         sensorsBucketAverage = null
-         badSensorValue = null
-         badDegradation = null
-      }
-      
-      
-      sendAPIupdate(badSensorIndex)
-      
+      badSensorIndex = Extrapolator.getBadSensorIndex(sensors, sensorLeeway = 1.5, recentN = dataProccesingConsideredN)
       
       proccessInputsPoolCur = 0
    }else{
       proccessInputsPoolCur +=1
    }
    
-   printlb("Bad sensor is ${badSensor}")
-   printlb("Value: ${badSensorValue}")
-   printlb("SensorsBucketAverage: ${sensorsBucketAverage}")
-   printlb("Future ${badSensor}: ${badDegradation?.format(dataFormat)}")
+   sendAPIupdate(badSensorIndex)
 }
 
 /**
@@ -344,8 +323,13 @@ fun receiveAPIrequest() {
  * ## Requirements:
  * * Send an api update through a socket.
  * */
+@OptIn(InternalSerializationApi::class)
 fun sendAPIupdate(badSensorIndex: Int?) {
-   badSensor = badSensorIndex
+   ServerUtils.sendAllUpdates(sensors,badSensorIndex){bucket->
+      Extrapolator.processDegradationCurve(bucket)
+   }
+   
+   
 }
 
 /**

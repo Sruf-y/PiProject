@@ -50,18 +50,6 @@ object Extrapolator {
       return worstIndex
    }
    
-   fun isUnusable(
-      avgs: List<Double>,
-      i: Int,
-      sensorLeeway: Double,
-      maxDeviation: Double
-   ): Boolean {
-      val others = avgs.filterIndexed { j, _ -> j != i }
-      val othersAgree = (others.max() - others.min()) <= sensorLeeway
-      if (!othersAgree) return false          // the deviation isn't high enough to determine if it's not usable anymore
-      val consensus = others.average()
-      return abs(avgs[i] - consensus) > maxDeviation
-   }
    
    fun processDegradationCurve(
       bucket: ArrayDeque<DataPoint>,
@@ -69,7 +57,9 @@ object Extrapolator {
       max_window_size: Int = 5,
       maxPoints: Int = 10
    ): List<DataPoint> {
-      require(bucket.size >= 3) { "Provided bucket needs to have at least 3 elements" }
+      if(bucket.size<3){
+         return emptyList()
+      }
       
       val win = bucket.toList().takeLast(max_window_size)
       val deltaT = maxOf(t_min_distance, bucket[1].timestamp - bucket.first().timestamp)
