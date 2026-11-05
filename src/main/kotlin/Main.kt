@@ -121,6 +121,9 @@ fun tryRet(args: Array<String>,vararg names: String,requiredIndex:Int = -1, onFo
 }
 fun main(args: Array<String>) {
    
+   ServerUtils.serverMain()
+   
+   if(false)
    if (args.isNotEmpty()) {
       
       if(tryRet(args,"-h","-help", requiredIndex = 0) { index,_->
@@ -181,7 +184,7 @@ fun main(args: Array<String>) {
       }
    }
    
-   
+   if(false)
    try {
       println("=============== Program Start ===============")
       init()

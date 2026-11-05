@@ -30,7 +30,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinCoroutinesVersion")
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
     implementation("org.slf4j:slf4j-simple:$slf4jVersion")
-    //implementation("com.pi4j.wiringpi:$pi4jVersion")
+    
+    implementation("io.ktor:ktor-server-core:3.1.3")
+    implementation("io.ktor:ktor-server-cio:3.1.3")
+    implementation("io.ktor:ktor-server-sse:3.1.3")
+    
 }
 
 tasks.test {
