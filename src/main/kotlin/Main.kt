@@ -28,6 +28,8 @@ var dataFormat: String = "%.2f"
 var delayTime: Long = 0
 
 var bucketSize: Int = 10
+var extrapolatorWindowSize = 5
+var extrapolatorPoints = 5
 fun <T>ArrayDeque<T>.isFull(): Boolean {
    return this.size >= bucketSize
 }
@@ -69,7 +71,8 @@ fun displayArgs() {
       =====================================================
       Arguments:
       -h,-help : show help
-      -bs,-bucketSize : set the bucketing size, default is ${bucketSize}. Minimum is 3
+      -bs,-bucketSize : set the bucketing size. Default is ${bucketSize}. Minimum is 3
+      -es,-extrapolatedSize : set the extrapolated number of points. Default is ${extrapolatorPoints}. Minimum is 3
       -format : set the format for the readings. Ex: %1.f or %.f or %2.2f. Default is ${dataFormat}
       -delay : set the loop delay. Default is ${delayTime}
       -pr,-printReadings : print temperature readings. false/true. Default ${printTemperatureReadings}
@@ -77,6 +80,7 @@ fun displayArgs() {
       -dps, -dataPoolSize : nr of iterations until the program proccesses data to point out the bad
       -pn, printNormal : uses the normal way of printing instead of resetting the cursor. Default is ${printNormal}
       -takeNValues : how many of the latest values to take into account when proccesing data
+      -windowSize : Size of the window used by the extrapolator out of the available bucket. Default ${extrapolatorWindowSize}
       =====================================================
    """.trimIndent()
    )
@@ -174,8 +178,14 @@ fun main(args: Array<String>) {
       tryRet(args,"-pn","-printNormal") { index,_->
          printNormal = true
       }
-      tryRet(args,"takeNValues"){index,_->
+      tryRet(args,"-takeNValues"){index,_->
          dataProccessingPoolSize = maxOf(args[index + 1].toInt(),3)
+      }
+      tryRet(args,"-windowSize") { index,_->
+         extrapolatorWindowSize = maxOf(args[index + 1].toInt(),5)
+      }
+      tryRet(args,"-es","-extrapolatedSize"){index,_->
+         extrapolatorPoints = maxOf(args[index + 1].toInt(),3)
       }
    }
    
@@ -326,7 +336,7 @@ fun receiveAPIrequest() {
 @OptIn(InternalSerializationApi::class)
 fun sendAPIupdate(badSensorIndex: Int?) {
    ServerUtils.sendAllUpdates(sensors,badSensorIndex){bucket->
-      Extrapolator.processDegradationCurve(bucket)
+      Extrapolator.processDegradationCurve(bucket, max_window_size = extrapolatorWindowSize, maxPoints = extrapolatorPoints)
    }
    
    
