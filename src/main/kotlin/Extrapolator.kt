@@ -50,7 +50,6 @@ object Extrapolator {
       return worstIndex
    }
    
-   
    fun processDegradationCurve(
       bucket: ArrayDeque<DataPoint>,
       t_min_distance: Long = 1000,
@@ -62,16 +61,19 @@ object Extrapolator {
       }
       
       val win = bucket.toList().takeLast(max_window_size)
-      val deltaT = maxOf(t_min_distance, bucket[1].timestamp - bucket.first().timestamp)
+      val deltaT = maxOf(t_min_distance, bucket[1].timestamp - bucket.first().timestamp) // just the average T between points
       
-      // Average STEP over real points only — trend-preserving, no dilution
+      // map the window taken into consideration to a collection of increases and decreases then average them for a steady increase/decrease (best method i could think of)
       val avgStep = win.zipWithNext { a, b -> b.value - a.value }.average()
       
       val lastT = bucket.last().timestamp
       val lastV = bucket.last().value
       
       return (1..maxPoints).map { k ->
-         DataPoint(lastT + k * deltaT, lastV + k * avgStep)
+         DataPoint(
+            lastT + k * deltaT,
+            lastV + k * avgStep // i*1 magnitude change * average change size
+         )
       }
    }
 }
