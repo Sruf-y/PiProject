@@ -54,8 +54,8 @@ object Extrapolator {
    fun processDegradationCurve(
       bucket: ArrayDeque<DataPoint>,
       t_min_distance: Long = 1000,
-      max_window_size: Int = 5,
-      maxPoints: Int = 10
+      max_window_size: Int,
+      maxPoints: Int
    ): List<DataPoint> {
       if(bucket.size<3){
          return emptyList()

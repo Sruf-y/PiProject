@@ -28,8 +28,8 @@ var dataFormat: String = "%.2f"
 var delayTime: Long = 0
 
 var bucketSize: Int = 10
-var extrapolatorWindowSize = 5
-var extrapolatorPoints = 5
+var extrapolatorWindowSize = 10
+var extrapolatorPoints = 10
 fun <T>ArrayDeque<T>.isFull(): Boolean {
    return this.size >= bucketSize
 }
@@ -79,7 +79,7 @@ fun displayArgs() {
       -pb,-printBuckets : print bucket values. false/true. Default ${printBucketValues}
       -dps, -dataPoolSize : nr of iterations until the program proccesses data to point out the bad
       -pn, printNormal : uses the normal way of printing instead of resetting the cursor. Default is ${printNormal}
-      -takeNValues : how many of the latest values to take into account when proccesing data
+      -takeNValues : how many of the latest values to take into account when proccesing data. Default ${dataProccesingConsideredN}
       -windowSize : Size of the window used by the extrapolator out of the available bucket. Default ${extrapolatorWindowSize}
       =====================================================
    """.trimIndent()
@@ -179,7 +179,7 @@ fun main(args: Array<String>) {
          printNormal = true
       }
       tryRet(args,"-takeNValues"){index,_->
-         dataProccessingPoolSize = maxOf(args[index + 1].toInt(),3)
+         dataProccesingConsideredN = maxOf(args[index + 1].toInt(),3)
       }
       tryRet(args,"-windowSize") { index,_->
          extrapolatorWindowSize = maxOf(args[index + 1].toInt(),5)
