@@ -1,4 +1,4 @@
-package com.botofan
+package com.botofan.IOTProjLab
 
 import io.ktor.http.ContentType
 import io.ktor.server.application.install
@@ -12,11 +12,8 @@ import io.ktor.server.sse.sse
 import io.ktor.sse.ServerSentEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
 val serverUpdates = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -140,7 +137,7 @@ es.onmessage = function(e) { render(JSON.parse(e.data)); };
          val measured = s.bucket.toList().takeLast(200)
          val extrapolated = extrapolate(s.bucket)
          serverUpdates.tryEmit(
-            ServerUtils.json.encodeToString(
+            json.encodeToString(
                Series(i, i == badSensorIndex, measured, extrapolated)
             )
          )

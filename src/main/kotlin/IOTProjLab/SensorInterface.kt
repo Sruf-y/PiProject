@@ -1,4 +1,4 @@
-package com.botofan
+package com.botofan.IOTProjLab
 
 interface SensorInterface<T> {
    fun onRead():T

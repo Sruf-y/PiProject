@@ -1,5 +1,6 @@
-package com.botofan
+package com.botofan.IOTProjLab
 
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -28,9 +29,9 @@ object Dallas18B20 {
    }
    
    private fun parseW1Slave(content: String): Double {
-      if (!content.contains("YES")) throw java.io.IOException("CRC check failed")
+      if (!content.contains("YES")) throw IOException("CRC check failed")
       val idx = content.indexOf("t=")
-      if (idx < 0) throw java.io.IOException("No temperature found in w1_slave")
+      if (idx < 0) throw IOException("No temperature found in w1_slave")
       return content.substring(idx + 2).trim().toDouble() / 1000.0
    }
 }

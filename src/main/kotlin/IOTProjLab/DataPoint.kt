@@ -1,4 +1,4 @@
-package com.botofan
+package com.botofan.IOTProjLab
 
 import kotlinx.serialization.Serializable
 

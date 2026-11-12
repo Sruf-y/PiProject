@@ -1,8 +1,6 @@
-package com.botofan
+package com.botofan.IOTProjLab
 
-import javax.xml.crypto.Data
 import kotlin.math.abs
-import kotlin.math.max
 
 object Extrapolator {
    
