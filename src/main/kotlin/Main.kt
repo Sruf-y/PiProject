@@ -1,7 +1,10 @@
 package com.botofan
 
+import com.botofan.IOTProjExam.MagneticSensor
 import com.botofan.IOTProjExam.ProjExamMain
+import com.botofan.IOTProjLab.Injector
 import com.botofan.IOTProjLab.ProjLabMain
+import com.botofan.IOTProjLab.ProjLabMain.pi
 
 /**
  * Tries to return whether speciffic arguments were found or not
@@ -36,6 +39,7 @@ fun generalHelp(): String{
       -h : Help
       -1 : Lab project
       -2 : Exam project
+      -3 : Magnetic test
    """.trimIndent()
 }
 
@@ -59,6 +63,14 @@ fun main(args: Array<String>) {
    }){
       return
    }
+   if(tryArg(args,"-3") { index,_->
+         val args = args.drop(index).toTypedArray()
+         val pi = Injector.getPi4Context()
+         MagneticSensor.startReading(pi)
+      }){
+      return
+   }
+   
    
 }
 
