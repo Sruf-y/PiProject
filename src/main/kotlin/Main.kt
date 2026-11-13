@@ -1,5 +1,6 @@
 package com.botofan
 
+import com.botofan.IOTProjExam.ProjExamMain
 import com.botofan.IOTProjLab.ProjLabMain
 
 /**
@@ -30,9 +31,35 @@ fun tryArg(
    return false
 }
 
+fun generalHelp(): String{
+   return """
+      -h : Help
+      -1 : Lab project
+      -2 : Exam project
+   """.trimIndent()
+}
+
 fun main(args: Array<String>) {
    
-   ProjLabMain.ProjectLabMain(args)
+   if(tryArg(args,"-h") { index,_->
+      generalHelp()
+      
+   }){
+      return
+   }
+   if(tryArg(args,"-1") { index,_->
+      val args = args.drop(index).toTypedArray()
+      ProjLabMain.ProjectLabMain(args)
+   }){
+      return
+   }
+   if(tryArg(args,"-2") { index,_->
+      val args = args.drop(index).toTypedArray()
+      ProjExamMain.ProjectExamMain(args)
+   }){
+      return
+   }
+   
 }
 
 

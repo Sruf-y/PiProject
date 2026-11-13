@@ -182,12 +182,12 @@ object ProjLabMain {
          runBlocking {
             while (true) {
                
-               //printlb("=========================================================")
+               printlb("=========================================================")
                receiveInputs()
                
                proccessInputs()
                
-               //prevLineCount = printBlock(printLines,prevLineCount)
+               prevLineCount = printBlock(printLines,prevLineCount)
                printLines.clear()
                
                delay(delayTime)
