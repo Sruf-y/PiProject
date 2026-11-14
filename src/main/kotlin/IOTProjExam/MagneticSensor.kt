@@ -44,6 +44,7 @@ object MagneticSensor {
          }
       })
       
+      //TODO: remove this for the actual project and instead MOVE it after the code this is embedded in so it doesn't use full cpu time like a while(true)
       Thread.sleep(Long.MAX_VALUE)
    }
 }

@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import com.pi4j.io.gpio.digital.DigitalState.LOW
 import com.pi4j.util.Console
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.InternalSerializationApi
 import java.time.Instant
@@ -28,7 +27,7 @@ object ProjLabMain {
    val sensors: ArrayList<SensorInterface<DataPoint>> = ArrayList()
    
    var dataFormat: String = "%.2f"
-   var delayTime: Long = 0
+   var delayMillis: Long = 1000
    
    var bucketSize: Int = 10
    var extrapolatorWindowSize = 10
@@ -77,7 +76,7 @@ object ProjLabMain {
       -bs,-bucketSize : set the bucketing size. Default is ${bucketSize}. Minimum is 3
       -es,-extrapolatedSize : set the extrapolated number of points. Default is ${extrapolatorPoints}. Minimum is 3
       -format : set the format for the readings. Ex: %1.f or %.f or %2.2f. Default is ${dataFormat}
-      -delay : set the loop delay. Default is ${delayTime}
+      -delay : set the loop delay. Default is ${delayMillis}
       -pr,-printReadings : print temperature readings. false/true. Default ${printTemperatureReadings}
       -pb,-printBuckets : print bucket values. false/true. Default ${printBucketValues}
       -dps, -dataPoolSize : nr of iterations until the program proccesses data to point out the bad
@@ -129,7 +128,7 @@ object ProjLabMain {
          }
          tryArg(args,"-delayTime"){ index, _->
             try {
-               delayTime = args[index + 1].toLong()
+               delayMillis = args[index + 1].toLong()
             } catch (ex: Exception) {
                throw Exception("Expected long after \"-delayTime\"",ex)
             }
@@ -190,7 +189,7 @@ object ProjLabMain {
                prevLineCount = printBlock(printLines,prevLineCount)
                printLines.clear()
                
-               delay(delayTime)
+               Thread.sleep(delayMillis)
                
             }
          }
