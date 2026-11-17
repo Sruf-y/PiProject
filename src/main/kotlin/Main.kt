@@ -77,7 +77,7 @@ fun main(args: Array<String>) {
          
          
          println("""
-            Using BCM ${bcm}. To change, rerun the program also adding \"-pin x\"
+            Using BCM ${bcm}. To change, rerun the program also adding "-pin x"
          """.trimIndent())
          
          MagneticSensor.startReading(pi,bcm)
