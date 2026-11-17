@@ -66,7 +66,21 @@ fun main(args: Array<String>) {
    if(tryArg(args,"-3") { index,_->
          val args = args.drop(index).toTypedArray()
          val pi = Injector.getPi4Context()
-         MagneticSensor.startReading(pi)
+         
+         var bcm = 23
+         
+         if(args.isNotEmpty()){
+            tryArg(args,"-pin") { index,_->
+               bcm = args[index+1].toInt()
+            }
+         }
+         
+         
+         println("""
+            Using BCM ${bcm}. To change, rerun the program also adding \"-pin x\"
+         """.trimIndent())
+         
+         MagneticSensor.startReading(pi,bcm)
       }){
       return
    }

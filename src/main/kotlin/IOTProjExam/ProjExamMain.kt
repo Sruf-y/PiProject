@@ -71,7 +71,7 @@ object ProjExamMain {
       }
    }
    
-   // Uses pin BCM 23 in the python file
+   // Uses pin BCM 23 in the python file. Change the python file to change pin.
    fun ProjectExamMain(args:Array<String>) {
       val stream = Dht11Stream(
          onReading = { r ->

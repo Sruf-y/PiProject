@@ -14,6 +14,7 @@ object MagneticSensor {
    
    fun startReading(
       pi: Context,
+      bcm: Int,
       onInitialState:(Boolean)-> Unit = {
          println("Reed initial state is : "+ if(it) detect_yes else detect_no)
       },
