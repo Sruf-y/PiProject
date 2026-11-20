@@ -4,7 +4,6 @@ import com.botofan.IOTProjExam.MagneticSensor
 import com.botofan.IOTProjExam.ProjExamMain
 import com.botofan.IOTProjLab.Injector
 import com.botofan.IOTProjLab.ProjLabMain
-import com.botofan.IOTProjLab.ProjLabMain.pi
 
 /**
  * Tries to return whether speciffic arguments were found or not
@@ -34,43 +33,48 @@ fun tryArg(
    return false
 }
 
-fun generalHelp(): String{
-   return """
+fun printGeneralHelp(){
+   println("""
       -h : Help
       -1 : Lab project
       -2 : Exam project
       -3 : Magnetic test
    """.trimIndent()
+   )
 }
 
 fun main(args: Array<String>) {
    
    if(tryArg(args,"-h") { index,_->
-      generalHelp()
+      printGeneralHelp()
       
    }){
       return
    }
    if(tryArg(args,"-1") { index,_->
-      val args = args.drop(index).toTypedArray()
-      ProjLabMain.ProjectLabMain(args)
+      val args= args.toMutableList()
+      args.removeAt(index)
+      
+      ProjLabMain.ProjectLabMain(args.toTypedArray())
    }){
       return
    }
-   if(tryArg(args,"-2") { index,_->
-      val args = args.drop(index).toTypedArray()
-      ProjExamMain.ProjectExamMain(args)
-   }){
+   if (tryArg(args, "-2") { index, _ ->
+         val args= args.toMutableList()
+         args.removeAt(index)
+         ProjExamMain.ProjectExamMain(args.toTypedArray())
+      }) {
       return
    }
    if(tryArg(args,"-3") { index,_->
-         val args = args.drop(index).toTypedArray()
+         val args= args.toMutableList()
+         args.removeAt(index)
          val pi = Injector.getPi4Context()
          
          var bcm = 23
          
          if(args.isNotEmpty()){
-            tryArg(args,"-pin") { index,_->
+            tryArg(args.toTypedArray(),"-pin") { index,_->
                bcm = args[index+1].toInt()
             }
          }
