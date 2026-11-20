@@ -74,15 +74,15 @@ object ProjLabMain {
       Arguments:
       -h,-help : show help
       -bs,-bucketSize : set the bucketing size. Default is ${bucketSize}. Minimum is 3
-      -es,-extrapolatedSize : set the extrapolated number of points. Default is ${extrapolatorPoints}. Minimum is 3
+      -ep,-extrapolatedPoints : set the extrapolated number of points. Default is ${extrapolatorPoints}. Minimum is 3
       -format : set the format for the readings. Ex: %1.f or %.f or %2.2f. Default is ${dataFormat}
       -delay : set the loop delay. Default is ${delayMillis}
       -pr,-printReadings : print temperature readings. false/true. Default ${printTemperatureReadings}
       -pb,-printBuckets : print bucket values. false/true. Default ${printBucketValues}
-      -dps, -dataPoolSize : nr of iterations until the program proccesses data to point out the bad
       -pn, printNormal : uses the normal way of printing instead of resetting the cursor. Default is ${printNormal}
-      -takeNValues : how many of the latest values to take into account when proccesing data. Default ${dataProccesingConsideredN}
+      -nValuesForBadSenzor : how many of the latest values to take into account when determining the bad sensor. Default ${nConsideredForAveragingBadSenzor}
       -windowSize : Size of the window used by the extrapolator out of the available bucket. Default ${extrapolatorWindowSize}
+      -badSenzorPoolingSize : How many reads before the bad senzor is decided. Default is ${badSenzorPoolingSize}
       =====================================================
    """.trimIndent()
       )
@@ -98,8 +98,8 @@ object ProjLabMain {
    
    var printTemperatureReadings = false
    var printBucketValues = true
-   var dataProccessingPoolSize = 10
-   var dataProccesingConsideredN = 5
+   var badSenzorPoolingSize = 3
+   var nConsideredForAveragingBadSenzor = 5
    
    fun ProjectLabMain(args:Array<String>){
       if (args.isNotEmpty()) {
@@ -147,24 +147,21 @@ object ProjLabMain {
                throw Exception("Expected boolean after \"-printBuckets\"",ex)
             }
          }
-         tryArg(args,"-dps", "-dataPoolSize") { index, _->
-            try {
-               dataProccessingPoolSize = abs(args[index + 1].toInt())
-            } catch (ex: Exception) {
-               throw Exception("Expected integer after \"-dataPoolSize\"",ex)
-            }
-         }
          tryArg(args,"-pn","-printNormal") { index, _->
             printNormal = true
          }
-         tryArg(args,"-takeNValues"){ index, _->
-            dataProccesingConsideredN = maxOf(args[index + 1].toInt(),3)
+         tryArg(args,"-nValuesForBadSenzor"){ index, _->
+            nConsideredForAveragingBadSenzor = maxOf(args[index + 1].toInt(),1)
+            println("Hehe hihi")
          }
          tryArg(args,"-windowSize") { index, _->
-            extrapolatorWindowSize = maxOf(args[index + 1].toInt(),5)
+            extrapolatorWindowSize = maxOf(args[index + 1].toInt(),3)
          }
-         tryArg(args,"-es","-extrapolatedSize"){ index, _->
+         tryArg(args,"-ep","-extrapolatedPoints"){ index, _->
             extrapolatorPoints = maxOf(args[index + 1].toInt(),3)
+         }
+         tryArg(args,"-badSenzorPoolingSize") {index,_->
+            badSenzorPoolingSize = maxOf(args[index + 1].toInt(),1)
          }
       }
       
@@ -288,9 +285,9 @@ object ProjLabMain {
    var badSensorIndex:Int? = null
    fun proccessInputs() {
       
-      if(proccessInputsPoolCur>=dataProccessingPoolSize){
+      if(proccessInputsPoolCur>=badSenzorPoolingSize){
          
-         badSensorIndex = Extrapolator.getBadSensorIndex(sensors, sensorLeeway = 1.5, recentN = dataProccesingConsideredN)
+         badSensorIndex = Extrapolator.getBadSensorIndex(sensors, sensorLeeway = 1.5, recentN = nConsideredForAveragingBadSenzor)
          
          proccessInputsPoolCur = 0
       }else{

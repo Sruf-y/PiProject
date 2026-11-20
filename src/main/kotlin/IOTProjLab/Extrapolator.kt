@@ -48,6 +48,10 @@ object Extrapolator {
       return worstIndex
    }
    
+   /**
+    * @param max_window_size the window taken into account to predict the degradation curve. Should be as big as possible.
+    * @param maxPoints how many points the prediction will have
+    * */
    fun processDegradationCurve(
       bucket: ArrayDeque<DataPoint>,
       t_min_distance: Long = 1000,

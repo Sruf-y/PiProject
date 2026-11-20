@@ -1,5 +1,6 @@
 package com.botofan
 
+import com.botofan.IOTProjExam.DHTReadingExample
 import com.botofan.IOTProjExam.MagneticSensor
 import com.botofan.IOTProjExam.ProjExamMain
 import com.botofan.IOTProjLab.Injector
@@ -37,15 +38,16 @@ fun printGeneralHelp(){
    println("""
       -h : Help
       -1 : Lab project
-      -2 : Exam project
+      -2 : DHT reading test
       -3 : Magnetic test
+      -4 : Exam Project
    """.trimIndent()
    )
 }
 
 fun main(args: Array<String>) {
    
-   if(tryArg(args,"-h") { index,_->
+   if(tryArg(args,"-h", requiredIndex = 0) { index,_->
       printGeneralHelp()
       
    }){
@@ -62,7 +64,8 @@ fun main(args: Array<String>) {
    if (tryArg(args, "-2") { index, _ ->
          val args= args.toMutableList()
          args.removeAt(index)
-         ProjExamMain.ProjectExamMain(args.toTypedArray())
+         
+         DHTReadingExample.DHTReadingExample(args.toTypedArray())
       }) {
       return
    }
@@ -88,6 +91,12 @@ fun main(args: Array<String>) {
       }){
       return
    }
+   if(tryArg(args,"-4") { index,_->
+         val args= args.toMutableList()
+         args.removeAt(index)
+         
+         ProjExamMain.ProjectExamMain(args.toTypedArray())
+      })
    
    
 }

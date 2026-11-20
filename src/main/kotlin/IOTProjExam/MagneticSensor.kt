@@ -14,7 +14,7 @@ object MagneticSensor {
    
    fun startReading(
       pi: Context,
-      bcm: Int,
+      bcm: Int, // using 23 above
       onInitialState:(Boolean)-> Unit = {
          println("Reed initial state is : "+ if(it) detect_yes else detect_no)
       },
@@ -28,7 +28,7 @@ object MagneticSensor {
          DigitalInput.newConfigBuilder(pi)
             .id("reed-ky025")
             .name("KY-025 Reed")
-            .bcm(23) // BCM GPIO23 = physical pin 16
+            .bcm(bcm) // BCM GPIO23 = physical pin 16
             .pull(PullResistance.PULL_UP)             // KY-025 DO idles high
             .build()
       )
